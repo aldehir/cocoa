@@ -49,14 +49,17 @@ module Cocoa::IRC
       if @nickname
         suffix = @host ? "@#{@host}" : ''
         suffix.prepend("!#{@user}") if @user && !suffix.empty?
-        ":#{@nickname}{suffix}"
+        "#{@nickname}#{suffix}"
       else
-        ":#{@servername}" if @servername
+        "#{@servername}" if @servername
       end
     end
 
     def to_s
-      [prefix, Commands.from_sym(@command), format_params].compact.join(' ')
+      pre = prefix
+      pre.prepend(':') if pre
+
+      [pre, Commands.from_sym(@command), format_params].compact.join(' ')
     end
 
     def self.parse(raw_msg)
