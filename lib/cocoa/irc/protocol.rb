@@ -16,6 +16,23 @@ module Cocoa::IRC
         user: user,
         realname: realname
       )
+
+      @subscriptions = Hash.new { |h, k| h[k] = [] }
+
+      subscribe(:ping, :on_ping)
+    end
+
+    def on_ping(msg)
+      pong = RawMessage.new(:pong, *msg.params)
+      send_message(pong)
+    end
+
+    def subscribe(command, method=nil, &block)
+      if method
+        @subscriptions[command] << method
+      elsif block_given?
+        @subscriptions[command] << block
+      end
     end
 
     def connection_completed
@@ -29,10 +46,7 @@ module Cocoa::IRC
     end
 
     def receive_message(msg)
-      if msg.command == :ping
-        pong = RawMessage.new(:pong, *msg.params)
-        send_message(pong)
-      end
+      publish(msg)
     end
 
     def receive_line(line)
@@ -42,6 +56,20 @@ module Cocoa::IRC
 
     def send_line(line)
       send_data(line + "\r\n")
+    end
+
+    protected
+
+    def publish(msg)
+      if @subscriptions.key? msg.command
+        @subscriptions[msg.command].each do |cb|
+          if cb.is_a? Proc
+            cb.call(msg)
+          else
+            send(cb, msg)
+          end
+        end
+      end
     end
   end
 end
