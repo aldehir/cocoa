@@ -20,11 +20,18 @@ module Cocoa::IRC
       @subscriptions = Hash.new { |h, k| h[k] = [] }
 
       subscribe(:ping, :on_ping)
+      subscribe(:err_nicknameinuse, :on_nickname_in_use)
     end
 
     def on_ping(msg)
       pong = RawMessage.new(:pong, *msg.params)
       send_message(pong)
+    end
+
+    def on_nickname_in_use(msg)
+      @identity.nickname += '_'
+      nick = RawMessage.new(:nick, @identity.nickname)
+      send_message(nick)
     end
 
     def subscribe(command, method=nil, &block)
