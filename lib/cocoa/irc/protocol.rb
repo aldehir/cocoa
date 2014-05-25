@@ -89,20 +89,16 @@ module Cocoa::IRC
                                 @identity.realname)
 
       nick_attempts = 1
-      handle_bad_name = proc do |m, timedout|
-        if m && [:err_nicknameinuse, :err_nickcollision].include?(m.command)
-          if nick_attempts < @max_nick_attempts
-            @identity.nickname += '_'
-            command(RawMessage.new(:nick, @identity.nickname),
-                    Seq::NickUserSequence.new, method(:register_succeeded),
-                    handle_bad_name)
-            nick_attempts += 1
-          else
-            register_failed(m)
-          end
-        else
-          reigster_failed(m)
-        end
+      handle_bad_name = lambda do |m, timedout|
+        handle = [:err_nickcollision, :err_nicknameinuse]
+        return register_failed(m) unless m and handle.include? m.command
+        return register_failed(m) if nick_attempts >= @max_nick_attempts
+
+        @identity.nickname += '_'
+        command(RawMessage.new(:nick, @identity.nickname),
+                Seq::NickUserSequence.new, method(:register_succeeded),
+                handle_bad_name)
+        nick_attempts += 1
       end
 
       command([nick_msg, user_msg], sequence, method(:register_succeeded),
