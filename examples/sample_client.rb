@@ -48,6 +48,8 @@ class SampleClient < EventMachine::Connection
         @log.info("Parted from #partme")
       end
     end
+
+    EventMachine::Timer.new(10) { quit("Session over") }
   end
 
   def register_failed(message)

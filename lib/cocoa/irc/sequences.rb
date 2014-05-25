@@ -65,6 +65,10 @@ module Cocoa::IRC
       end
     end
 
+    class QuitSequence < Sequence
+      collect { |c| c.add_end_reply :error }
+    end
+
     class NamesSequence < Sequence
       collect do |c|
         c.add_reply :rpl_namreply, match: { channel: 2 }

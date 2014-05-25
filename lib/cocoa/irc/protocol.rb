@@ -66,6 +66,14 @@ module Cocoa::IRC
       command(message, sequence, callback, errback, &block)
     end
 
+    def quit(message)
+      message = RawMessage.new(:quit, message)
+      sequence = Seq::QuitSequence.new
+
+      stop_eventmachine = proc { EventMachine.stop }
+      command(message, sequence, stop_eventmachine, stop_eventmachine)
+    end
+
     def names(channel, callback = nil, errback = nill, &block)
       message = RawMessage.new(:names, channel)
       sequence = Seq::NamesSequence.new(channel: channel)
