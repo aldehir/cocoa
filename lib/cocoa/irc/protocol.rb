@@ -13,7 +13,8 @@ module Cocoa::IRC
 
     attr_reader :identity
 
-    def initialize(nickname, user, realname)
+    def initialize(nickname, user, realname, max_nick_attempts: 3)
+      @max_nick_attempts = max_nick_attempts
       @identity = OpenStruct.new(
         nickname: nickname,
         user: user,
@@ -70,8 +71,7 @@ module Cocoa::IRC
       end
 
       @active_sequences << sequence
-
-      send_message(message)
+      [*message].each { |m| send_message(m) }
     end
 
     def subscribe(command, method=nil, &block)
@@ -83,17 +83,34 @@ module Cocoa::IRC
     end
 
     def connection_completed
-      reattempt_nick = proc do |m, timedout|
-        unless timedout
-          @identity.nickname += '_'
-          nick(@identity.nickname, errback: reattempt_nick)
+      sequence = Seq::NickUserSequence.new
+      nick_msg = RawMessage.new(:nick, @identity.nickname)
+      user_msg = RawMessage.new(:user, @identity.user, '0', '*',
+                                @identity.realname)
+
+      nick_attempts = 1
+      handle_bad_name = proc do |m, timedout|
+        if m && [:err_nicknameinuse, :err_nickcollision].include?(m.command)
+          if nick_attempts < @max_nick_attempts
+            @identity.nickname += '_'
+            command(RawMessage.new(:nick, @identity.nickname),
+                    Seq::NickUserSequence.new, method(:register_succeeded),
+                    handle_bad_name)
+            nick_attempts += 1
+          else
+            register_failed(m)
+          end
+        else
+          reigster_failed(m)
         end
       end
 
-      nick(@identity.nickname, errback = reattempt_nick)
-      send_message(RawMessage.new(:user, @identity.user, '0', '*',
-                                  @identity.realname))
+      command([nick_msg, user_msg], sequence, method(:register_succeeded),
+              handle_bad_name)
     end
+
+    def register_succeeded(messages); end
+    def register_failed(message); end
 
     def send_message(msg)
       send_line(msg.to_s)
@@ -125,9 +142,22 @@ module Cocoa::IRC
         end
       end
 
-      @active_sequences.delete_if do |sequence|
-        sequence.collect(msg) if sequence.collect?(msg)
-        sequence.stop?(msg)
+      collect_sequences(msg)
+    end
+
+    def collect_sequences(msg)
+      stopped = []
+      @active_sequences.each do |sequence|
+        if sequence.stop? msg
+          stopped << sequence
+        elsif sequence.collect? msg
+          sequence.collect(msg)
+        end
+      end
+
+      stopped.each do |seq|
+        seq.collect(msg)
+        @active_sequences.delete(seq)
       end
     end
   end

@@ -42,6 +42,10 @@ class SampleClient < EventMachine::Connection
     end
   end
 
+  def register_succeeded(messages)
+    @log.info("Successfully registered as nick #{@identity.nickname}")
+  end
+
   def receive_line(line)
     @log.info(line)
     super

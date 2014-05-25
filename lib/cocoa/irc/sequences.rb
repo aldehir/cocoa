@@ -26,11 +26,20 @@ module Cocoa::IRC
       end
     end
 
+    class NickUserSequence < Sequence
+      collect do |c|
+        c.add_end_reply :rpl_welcome
+        c.add_error_reply :err_nicknameinuse, :err_nickcollision,
+                          :err_erroneusnickname, :err_restricted,
+                          :err_alreadyregistred
+      end
+    end
+
     class NickSequence < Sequence
       collect do |c|
         c.add_end_reply :nick, match: { nickname: 0 }, from: :old_nickname
         c.add_error_reply :err_nicknameinuse, :err_nickcollision,
-                          :err_erroneusnickname,
+                          :err_erroneusnickname, :err_restricted,
                           match: { nickname: 1 }
       end
     end
