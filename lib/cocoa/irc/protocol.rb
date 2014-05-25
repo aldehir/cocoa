@@ -153,11 +153,8 @@ module Cocoa::IRC
     def collect_sequences(msg)
       stopped = []
       @active_sequences.each do |sequence|
-        if sequence.stop? msg
-          stopped << sequence
-        elsif sequence.collect? msg
-          sequence.collect(msg)
-        end
+        stopped.push(sequence) && next if sequence.stop?(msg)
+        sequence.collect(msg) if sequence.collect?(msg)
       end
 
       stopped.each do |seq|
