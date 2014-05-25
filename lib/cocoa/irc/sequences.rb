@@ -28,7 +28,7 @@ module Cocoa::IRC
 
     class NickSequence < Sequence
       collect do |c|
-        c.add_reply :nick, match: { nickname: 0 }, from: :old_nickname
+        c.add_end_reply :nick, match: { nickname: 0 }, from: :old_nickname
         c.add_error_reply :err_nicknameinuse, :err_nickcollision,
                           :err_erroneusnickname,
                           match: { nickname: 1 }
