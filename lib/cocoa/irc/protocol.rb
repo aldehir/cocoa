@@ -92,12 +92,9 @@ module Cocoa::IRC
       [*message].each { |m| send_message(m) }
     end
 
-    def subscribe(command, method=nil, &block)
-      if method
-        @subscriptions[command] << method
-      elsif block_given?
-        @subscriptions[command] << block
-      end
+    def subscribe(command, meth = nil, &block)
+      @subscriptions[command] << method(meth) if meth
+      @subscriptions[command] << block if block_given?
     end
 
     def connection_completed
@@ -147,13 +144,7 @@ module Cocoa::IRC
 
     def publish(msg)
       if @subscriptions.key? msg.command
-        @subscriptions[msg.command].each do |cb|
-          if cb.is_a? Proc
-            cb.call(msg)
-          else
-            send(cb, msg)
-          end
-        end
+        @subscriptions[msg.command].each { |cb| cb.call(msg) }
       end
 
       collect_sequences(msg)
