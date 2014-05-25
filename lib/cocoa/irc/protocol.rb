@@ -46,24 +46,24 @@ module Cocoa::IRC
       command(message, sequence, callback, errback, &block)
     end
 
-    def join(channel, callback = nil, errback = nil, &block)
+    def join(channel, callback = nil, errback = nil, timeout = nil, &block)
       message = RawMessage.new(:join, channel)
       sequence = Seq::JoinSequence.new(
         channel: channel,
         nickname: @identity.nickname
       )
 
-      command(message, sequence, callback, errback, &block)
+      command(message, sequence, callback, errback, timeout, &block)
     end
 
-    def part(channel, callback = nil, errback = nil, &block)
+    def part(channel, callback = nil, errback = nil, timeout = nil, &block)
       message = RawMessage.new(:part, channel)
       sequence = Seq::PartSequence.new(
         channel: channel,
         nickname: @identity.nickname
       )
 
-      command(message, sequence, callback, errback, &block)
+      command(message, sequence, callback, errback, timeout, &block)
     end
 
     def quit(message)
@@ -71,22 +71,22 @@ module Cocoa::IRC
       sequence = Seq::QuitSequence.new
 
       stop_eventmachine = proc { EventMachine.stop }
-      command(message, sequence, stop_eventmachine, stop_eventmachine)
+      command(message, sequence, *([stop_eventmachine] * 3))
     end
 
-    def names(channel, callback = nil, errback = nill, &block)
+    def names(channel, callback = nil, errback = nill, timeout = nil, &block)
       message = RawMessage.new(:names, channel)
       sequence = Seq::NamesSequence.new(channel: channel)
-      command(message, sequence, callback, errback, &block)
+      command(message, sequence, callback, errback, timeout, &block)
     end
 
-    def command(message, sequence, callback = nil, errback = nil, &block)
+    def command(message, sequence, callback = nil, errback = nil, 
+                timeout = nil, &block)
       sequence.callback(&block) if block_given?
       sequence.callback(&callback) if callback
       sequence.errback(&errback) if errback
-      sequence.errback do |_, timedout|
-        @active_sequences.delete(sequence) if timedout
-      end
+      sequence.timeout_callback(&timeout) if timeout
+      sequence.timeout_callback { @active_sequences.delete(sequence) }
 
       @active_sequences << sequence
       [*message].each { |m| send_message(m) }
@@ -104,20 +104,21 @@ module Cocoa::IRC
                                 @identity.realname)
 
       nick_attempts = 1
-      handle_bad_name = lambda do |m, timedout|
+      handle_timeout = -> { register_failed(nil) }
+      handle_bad_name = lambda do |m|
         handle = [:err_nickcollision, :err_nicknameinuse]
-        return register_failed(m) unless m and handle.include? m.command
+        return register_failed(m) unless handle.include? m.command
         return register_failed(m) if nick_attempts >= @max_nick_attempts
 
         @identity.nickname += '_'
         command(RawMessage.new(:nick, @identity.nickname),
                 Seq::NickUserSequence.new, method(:register_succeeded),
-                handle_bad_name)
+                handle_bad_name, handle_timeout)
         nick_attempts += 1
       end
 
       command([nick_msg, user_msg], sequence, method(:register_succeeded),
-              handle_bad_name)
+              handle_bad_name, handle_timeout)
     end
 
     def register_succeeded(messages); end

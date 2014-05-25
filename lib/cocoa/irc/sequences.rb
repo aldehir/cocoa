@@ -15,6 +15,17 @@ module Cocoa::IRC
         timeout(timeout || 5, nil, true)
       end
 
+      alias_method :old_errback, :errback
+      def errback(&block)
+        eb = -> (message, timedout) { block.call(message) unless timedout }
+        old_errback(&eb)
+      end
+
+      def timeout_callback(&block)
+        eb = -> (message, timedout) { block.call() if timedout }
+        old_errback(&eb)
+      end
+
       def collect(message)
         super
 
