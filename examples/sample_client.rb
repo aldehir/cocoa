@@ -41,6 +41,13 @@ class SampleClient < EventMachine::Connection
     join("#passworded", errback = errback) do |messages|
       @log.info("Join successful")
     end
+
+    join("#partme") do |_|
+      @log.info("Joined #partme")
+      part("#partme") do |_|
+        @log.info("Parted from #partme")
+      end
+    end
   end
 
   def register_failed(message)

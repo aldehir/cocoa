@@ -56,6 +56,16 @@ module Cocoa::IRC
       command(message, sequence, callback, errback, &block)
     end
 
+    def part(channel, callback = nil, errback = nil, &block)
+      message = RawMessage.new(:part, channel)
+      sequence = Seq::PartSequence.new(
+        channel: channel,
+        nickname: @identity.nickname
+      )
+
+      command(message, sequence, callback, errback, &block)
+    end
+
     def names(channel, callback = nil, errback = nill, &block)
       message = RawMessage.new(:names, channel)
       sequence = Seq::NamesSequence.new(channel: channel)

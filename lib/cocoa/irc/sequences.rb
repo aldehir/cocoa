@@ -57,6 +57,14 @@ module Cocoa::IRC
       end
     end
 
+    class PartSequence < Sequence
+      collect do |c|
+        c.add_end_reply :part, match: { channel: 0 }, from: :nickname
+        c.add_error_reply :err_notonchannel, :err_nosuchchannel,
+                          match: { channel: 0 }
+      end
+    end
+
     class NamesSequence < Sequence
       collect do |c|
         c.add_reply :rpl_namreply, match: { channel: 2 }
