@@ -7,7 +7,6 @@ $LOAD_PATH.unshift(lib_dir) unless $LOAD_PATH.include? lib_dir
 
 require 'cocoa'
 
-
 class SampleClient < EventMachine::Connection
   include Cocoa::IRC::Protocol
 
@@ -22,6 +21,25 @@ class SampleClient < EventMachine::Connection
     end
 
     queue.pop &cb
+
+    subscribe(:rpl_welcome) do
+      # send_message(Cocoa::IRC::RawMessage.new(:join, "#Cocoa"))
+      join("#Cocoa") do |messages|
+        users = messages.select {
+          |m| m.command == :rpl_namreply
+        }.flat_map { |m| m.params.last.split() }
+        topic_msg = messages.find { |m| m.command == :rpl_topic }
+        topic = (topic_msg && topic_msg.params.last) || ''
+
+        @log.info("Joined #Cocoa, users: " + users.join(', '))
+        @log.info("Topic: #{topic}")
+      end
+
+      errback = proc { |m| @log.error("Join failed: " + m.params.last) }
+      join("#passworded", errback: errback) do |messages|
+        @log.info("Join successful")
+      end
+    end
   end
 
   def receive_line(line)
@@ -68,6 +86,8 @@ EventMachine.run do
         Rainbow(output).green
       elsif severity == 'WARN'
         Rainbow(output).yellow
+      elsif severity == 'ERROR'
+        Rainbow(output).red
       else
         output
       end

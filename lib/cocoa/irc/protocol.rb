@@ -3,6 +3,7 @@ require 'logger'
 require 'ostruct'
 
 require 'cocoa/irc/raw_message'
+require 'cocoa/irc/sequences'
 
 module Cocoa::IRC
   module Protocol
@@ -18,6 +19,7 @@ module Cocoa::IRC
       )
 
       @subscriptions = Hash.new { |h, k| h[k] = [] }
+      @collectors = []
 
       subscribe(:ping, :on_ping)
       subscribe(:err_nicknameinuse, :on_nickname_in_use)
@@ -34,12 +36,35 @@ module Cocoa::IRC
       send_message(nick)
     end
 
+    def join(channel, callback: nil, errback: nil, &block)
+      join = RawMessage.new(:join, channel)
+      collect(Sequences::JoinSequence.new(
+        channel: channel,
+        nickname: @identity.nickname
+      ), callback: callback, errback: errback, &block)
+
+      send_message(join)
+    end
+
+    def names(channel, &callback)
+      names = RawMessage.new(:names, channel)
+      collect(Sequences::NamesSequence.new(channel: channel, &callback))
+      send_message(names)
+    end
+
     def subscribe(command, method=nil, &block)
       if method
         @subscriptions[command] << method
       elsif block_given?
         @subscriptions[command] << block
       end
+    end
+
+    def collect(sequence, callback: nil, errback: nil, &block)
+      sequence.callback(&block) if block_given?
+      sequence.callback(&callback) if callback
+      sequence.errback(&errback) if errback
+      @collectors << sequence
     end
 
     def connection_completed
@@ -76,6 +101,11 @@ module Cocoa::IRC
             send(cb, msg)
           end
         end
+      end
+
+      @collectors.delete_if do |collector|
+        collector.collect(msg) if collector.collect?(msg)
+        collector.stop?(msg)
       end
     end
   end
