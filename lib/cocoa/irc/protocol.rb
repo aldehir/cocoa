@@ -104,7 +104,6 @@ module Cocoa::IRC
                                 @identity.realname)
 
       nick_attempts = 1
-      handle_timeout = -> { register_failed(nil) }
       handle_bad_name = lambda do |m|
         handle = [:err_nickcollision, :err_nicknameinuse]
         return register_failed(m) unless handle.include? m.command
@@ -113,16 +112,17 @@ module Cocoa::IRC
         @identity.nickname += '_'
         command(RawMessage.new(:nick, @identity.nickname),
                 Seq::NickUserSequence.new, method(:register_succeeded),
-                handle_bad_name, handle_timeout)
+                handle_bad_name, method(:register_timeout))
         nick_attempts += 1
       end
 
       command([nick_msg, user_msg], sequence, method(:register_succeeded),
-              handle_bad_name, handle_timeout)
+              handle_bad_name, method(:register_timeout))
     end
 
     def register_succeeded(messages); end
     def register_failed(message); end
+    def register_timeout(); end
 
     def send_message(msg)
       send_line(msg.to_s)
