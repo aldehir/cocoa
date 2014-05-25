@@ -74,7 +74,7 @@ module Cocoa::IRC
       command(message, sequence, *([stop_eventmachine] * 3))
     end
 
-    def names(channel, callback = nil, errback = nill, timeout = nil, &block)
+    def names(channel, callback = nil, errback = nil, timeout = nil, &block)
       message = RawMessage.new(:names, channel)
       sequence = Seq::NamesSequence.new(channel: channel)
       command(message, sequence, callback, errback, timeout, &block)
