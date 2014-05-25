@@ -8,15 +8,18 @@ module Cocoa::IRC
       include Collectable
 
       def initialize(**args, &block)
+        timeout = args.delete(:timeout)
+
         super(**args)
         callback &block if block_given?
+        timeout(timeout || 5, nil, true)
       end
 
       def collect(message)
         super
 
         if error? message
-          fail(message)
+          fail(message, false)
         elsif stop? message
           succeed(@messages)
         end
@@ -28,7 +31,7 @@ module Cocoa::IRC
         c.add_reply :nick, match: { nickname: 0 }, from: :old_nickname
         c.add_error_reply :err_nicknameinuse, :err_nickcollision,
                           :err_erroneusnickname,
-                          match: { nickname: 0 }
+                          match: { nickname: 1 }
       end
     end
 

@@ -24,18 +24,11 @@ module Cocoa::IRC
       @active_sequences = []
 
       subscribe(:ping, :on_ping)
-      subscribe(:err_nicknameinuse, :on_nickname_in_use)
     end
 
     def on_ping(msg)
       pong = RawMessage.new(:pong, *msg.params)
       send_message(pong)
-    end
-
-    def on_nickname_in_use(msg)
-      @identity.nickname += '_'
-      nick = RawMessage.new(:nick, @identity.nickname)
-      send_message(nick)
     end
 
     def nick(nickname, **opts, &block)
@@ -72,6 +65,10 @@ module Cocoa::IRC
       sequence.callback(&block) if block_given?
       sequence.callback(&callback) if callback
       sequence.errback(&errback) if errback
+      sequence.errback do |_, timedout|
+        @active_sequences.delete(sequence) if timedout
+      end
+
       @active_sequences << sequence
 
       send_message(message)
@@ -86,7 +83,14 @@ module Cocoa::IRC
     end
 
     def connection_completed
-      nick(@identity.nickname)
+      reattempt_nick = proc do |m, timedout|
+        unless timedout
+          @identity.nickname += '_'
+          nick(@identity.nickname, errback: reattempt_nick)
+        end
+      end
+
+      nick(@identity.nickname, errback: reattempt_nick)
       send_message(RawMessage.new(:user, @identity.user, '0', '*',
                                   @identity.realname))
     end
