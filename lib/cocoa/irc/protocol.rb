@@ -31,7 +31,7 @@ module Cocoa::IRC
       send_message(pong)
     end
 
-    def nick(nickname, **opts, &block)
+    def nick(nickname, callback = nil, errback = nil, &block)
       message = RawMessage.new(:nick, nickname)
       sequence = Seq::NickSequence.new(nickname: nickname,
                                        old_nickname: @identity.nickname)
@@ -42,26 +42,26 @@ module Cocoa::IRC
         @identity.nickname = nick_msg.params.last
       end
 
-      command(message, sequence, **opts, &block)
+      command(message, sequence, callback, errback, &block)
     end
 
-    def join(channel, **opts, &block)
+    def join(channel, callback = nil, errback = nil, &block)
       message = RawMessage.new(:join, channel)
       sequence = Seq::JoinSequence.new(
         channel: channel,
         nickname: @identity.nickname
       )
 
-      command(message, sequence, **opts, &block)
+      command(message, sequence, callback, errback, &block)
     end
 
-    def names(channel, **opts, &block)
+    def names(channel, callback = nil, errback = nill, &block)
       message = RawMessage.new(:names, channel)
       sequence = Seq::NamesSequence.new(channel: channel)
-      command(message, sequence, **opts, &block)
+      command(message, sequence, callback, errback, &block)
     end
 
-    def command(message, sequence, callback: nil, errback: nil, &block)
+    def command(message, sequence, callback = nil, errback = nil, &block)
       sequence.callback(&block) if block_given?
       sequence.callback(&callback) if callback
       sequence.errback(&errback) if errback
@@ -90,7 +90,7 @@ module Cocoa::IRC
         end
       end
 
-      nick(@identity.nickname, errback: reattempt_nick)
+      nick(@identity.nickname, errback = reattempt_nick)
       send_message(RawMessage.new(:user, @identity.user, '0', '*',
                                   @identity.realname))
     end
