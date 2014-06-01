@@ -37,7 +37,7 @@ class SampleClient < EventMachine::Connection
     end
 
     errback = proc { |m| @log.error("Join failed: " + m.params.last) }
-    join("#passworded", errback = errback) do |messages|
+    join("#passworded", errback: errback) do |messages|
       @log.info("Join successful")
     end
 
