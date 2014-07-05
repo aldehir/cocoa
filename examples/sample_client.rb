@@ -11,7 +11,7 @@ class SampleClient < EventMachine::Connection
   include Cocoa::Client
 
   def initialize(queue)
-    super("Cocoa", "Cocoa", "Cocoa IRC Client")
+    super("Cocoa", "CocoaRN", "Cocoa IRC Client")
 
     @queue = queue
     cb = proc do |msg|
@@ -20,35 +20,60 @@ class SampleClient < EventMachine::Connection
     end
 
     queue.pop &cb
+
+    subscribe(:error) { EventMachine.stop }
   end
 
   def register_succeeded(messages)
     super
 
-    join("#Cocoa") do |messages|
-      users = messages.select {
-        |m| m.command == :rpl_namreply
-      }.flat_map { |m| m.params.last.split() }
-      topic_msg = messages.find { |m| m.command == :rpl_topic }
-      topic = (topic_msg && topic_msg.params.last) || ''
+    deferrable = join("#Cocoa")
+    deferrable.callback do |channel|
+      channel.message("Hi there!")
+      channel.notice("Hi there!")
+      log.info("Callback called")
 
-      @log.info("Joined #Cocoa, users: " + users.join(', '))
-      @log.info("Topic: #{topic}")
-    end
+      channel.users.each do |user|
+        log.info("User (unsync): #{user.nickname} #{user.user} #{user.host} #{user.realname}")
 
-    errback = proc { |m| @log.error("Join failed: " + m.params.last) }
-    join("#passworded", errback: errback) do |messages|
-      @log.info("Join successful")
-    end
+        user.synchronized do
+          log.info("User (sync): #{user.nickname} #{user.user} #{user.host} #{user.realname}")
+          log.info("Sync'd?: #{user.synchronized?}")
 
-    join("#partme") do |_|
-      @log.info("Joined #partme")
-      part("#partme") do |_|
-        @log.info("Parted from #partme")
+          user.synchronized do
+            log.info("User (sync): #{user.nickname} #{user.user} #{user.host} #{user.realname}")
+            log.info("Sync'd?: #{user.synchronized?}")
+          end
+        end
       end
     end
 
-    EventMachine::Timer.new(10) { quit("Session over") }
+    join("#Cocoa2")
+
+    #join("#Cocoa") do |messages|
+    #  users = messages.select {
+    #    |m| m.command == :rpl_namreply
+    #  }.flat_map { |m| m.params.last.split() }
+    #  topic_msg = messages.find { |m| m.command == :rpl_topic }
+    #  topic = (topic_msg && topic_msg.params.last) || ''
+
+    #  @log.info("Joined #Cocoa, users: " + users.join(', '))
+    #  @log.info("Topic: #{topic}")
+    #end
+
+    #errback = proc { |m| @log.error("Join failed: " + m.params.last) }
+    #join("#passworded", errback: errback) do |messages|
+    #  @log.info("Join successful")
+    #end
+
+    #join("#partme") do |_|
+    #  @log.info("Joined #partme")
+    #  part("#partme") do |_|
+    #    @log.info("Parted from #partme")
+    #  end
+    #end
+
+    # EventMachine::Timer.new(10) { quit("Session over") }
   end
 
   def register_failed(message)
