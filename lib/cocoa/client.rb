@@ -4,7 +4,8 @@ require 'rainbow'
 
 require 'cocoa/irc'
 require 'cocoa/filtered_observable'
-require 'cocoa/builders/channel_builder'
+require 'cocoa/user_list'
+require 'cocoa/channel_list'
 
 module Cocoa
   module Client
@@ -17,19 +18,23 @@ module Cocoa
       super()
 
       @max_nick_attempts = max_nick_attempts
-      @identity = OpenStruct.new(
-        nickname: nickname,
-        user: user,
-        realname: realname
-      )
+      @identity = User.new(self, nickname: nickname, user: user,
+                           realname: realname)
 
       @factory = IRC::CommandFactory.new(self)
 
       subscribe(:ping, :on_ping)
       subscribe(:topic, :on_topic)
+      subscribe(:nick, :on_nick)
+      subscribe(:privmsg, :on_privmsg)
+      subscribe(:notice, :on_notice)
+      subscribe(:join, :on_join)
+      subscribe(:part, :on_part)
+      subscribe(:kick, :on_kick)
+      subscribe(:quit, :on_quit)
 
-      @channels = []
-      @users = []
+      @channels = ChannelList.new(self)
+      @users = UserList.new(self)
 
       setup_logger
     end
@@ -47,7 +52,82 @@ module Cocoa
     def on_topic(msg)
       channel, topic = msg.params
       log.info(topic)
-      notify_observers(:topic_changed, channel, topic)
+      notify_observers(:topic_change, channel, topic)
+    end
+
+    def on_nick(msg)
+      old = msg.nickname
+      new = msg.params[-1]
+      notify_observers(:nick_change, old, new)
+    end
+
+    def on_privmsg(msg)
+      from = @users[msg.nickname]
+      to = msg.params[0]
+
+      if to =~ /\A[#&]/
+        to = @channels[to]
+      else
+        to = @users[to]
+      end
+
+      message = strip_formatting(msg.params[-1])
+      notify_observers(:message, to, from, message)
+
+      specialized = to.is_a?(Channel) ? :channel_message : :user_message
+      puts to
+      notify_observers(specialized, to, from, message)
+    end
+
+    def on_notice(msg)
+      if msg.nickname
+        # Notice from user to channel or user
+        from = @users[msg.nickname]
+        to = msg.params[0]
+
+        if to =~ /\A[#&]/
+          to = @channels[to]
+        else
+          to = @users[to]
+        end
+
+        message = strip_formatting(msg.params[-1])
+        notify_observers(:notice, to, from, message)
+
+        specialized = to.is_a?(Channel) ? :channel_notice : :user_notice
+        notify_observers(specialized, to, from, message)
+      else
+        # Server notice
+        notify_observers(:server_notice, message)
+      end
+    end
+
+    def on_join(msg)
+      user = @users[msg.nickname]
+      channel = @channels[msg.params[0]]
+      notify_observers(:user_join, channel, user) unless user.me?
+    end
+
+    def on_part(msg)
+      user = @users[msg.nickname]
+      channel = @channels[msg.params[0]]
+      message = msg.params.last
+      notify_observers(:user_part, channel, user, message)
+    end
+
+    def on_quit(msg)
+      user = @users[msg.nickname]
+      message = msg.params.last
+      notify_observers(:user_quit, user, message)
+    end
+
+    def on_kick(msg)
+      from = @channels[msg.params[0]]
+      user = @users[msg.params[1]]
+      by = @users[msg.nickname]
+      message = msg.params.last
+
+      notify_observers(:user_kick, from, user, by, message)
     end
 
     def join(channel, deferrable = nil)
@@ -55,10 +135,38 @@ module Cocoa
       message, sequence = @factory.create(:join, channel)
 
       sequence.callback do |messages|
-        builder = Builders::ChannelBuilder.new(self)
-        builder.build(messages)
+        channel_obj = Channel.new(self)
 
-        channel_obj = builder.result
+        messages.each do |message|
+          case message.command
+          when :join
+            channel_obj.name = message.params.last
+          when :rpl_topic
+            channel_obj.topic = message.params.last
+          when :rpl_namreply
+            partial = message.params.last.split().map do |nick|
+              /\A(?<prefix>[@+%])?(?<nick>.*)\z/.match(nick)
+            end
+
+            partial.each do |matchdata|
+              prefix = matchdata['prefix']
+              nick = matchdata['nick']
+
+              user = @users[nick]
+              unless user
+                user = User.new(self, nickname: nick)
+                @users.add(user)
+              end
+
+              channel_obj.add_user(user, prefix: prefix)
+            end
+          end
+        end
+
+        @channels.add(channel_obj)
+
+        # Send join notification
+        notify_observers(:user_join, channel_obj, @identity)
 
         # Call success on the deferrable
         deferrable.succeed(channel_obj)
@@ -135,6 +243,7 @@ module Cocoa
     end
 
     def register_succeeded(messages)
+      @users << @identity
       log.info("Successfully registered as nick #{identity.nickname}")
     end
 
@@ -163,6 +272,10 @@ module Cocoa
     end
 
     private
+
+    def strip_formatting(line)
+      line.gsub(/([\x0F\x02\x16\x1F]|\x03\d{0,2}(,\d{0,2})?)/, '')
+    end
 
     def setup_logger
       colors = { 'DEBUG' => :cyan, 'WARN' => :yellow, 'ERROR' => :red,

@@ -4,16 +4,7 @@ module Cocoa
   module Messageable
     def self.included(base)
       base.extend(ClassMethods)
-    end
-
-    def message(message)
-      msg = IRC::RawMessage.new(:privmsg, target, message)
-      EventMachine.next_tick { client.send_message(msg) }
-    end
-
-    def notice(message)
-      msg = IRC::RawMessage.new(:notice, target, message)
-      EventMachine.next_tick { client.send_message(msg) }
+      base.send(:include, InstanceMethods)
     end
 
     module ClassMethods
@@ -25,16 +16,28 @@ module Cocoa
       end
     end
 
-    private
+    module InstanceMethods
+      def message(message)
+        msg = IRC::RawMessage.new(:privmsg, target, message)
+        EventMachine.next_tick { client.send_message(msg) }
+      end
 
-    def client
-      variable = self.class.class_variable_get(:@@message_client)
-      instance_variable_get("@#{variable}")
-    end
+      def notice(message)
+        msg = IRC::RawMessage.new(:notice, target, message)
+        EventMachine.next_tick { client.send_message(msg) }
+      end
 
-    def target
-      variable = self.class.class_variable_get(:@@message_target)
-      instance_variable_get("@#{variable}")
+      private
+
+      def client
+        variable = self.class.class_variable_get(:@@message_client)
+        instance_variable_get("@#{variable}")
+      end
+
+      def target
+        variable = self.class.class_variable_get(:@@message_target)
+        instance_variable_get("@#{variable}")
+      end
     end
   end
 end

@@ -1,24 +1,25 @@
 require 'cocoa/messageable'
 require 'cocoa/synchronizable'
+require 'cocoa/filtered_observable'
 
 module Cocoa
   class User
+    include FilteredObservable
     include Messageable
     include Synchronizable
 
-    attr_accessor :nickname, :user, :host, :realname
+    attr_accessor :user, :host, :realname
+    attr_observable :nickname => :nick_change
 
     message_target :nickname
     synchronize :user, :host, :realname, method: :whois
 
-    def initialize(client)
+    def initialize(client, **opts)
       @client = client
-      @nickname = nil
-      @user = nil
-      @host = nil
-      @realname = nil
-
-      init_observations
+      @nickname = opts[:nickname]
+      @user = opts[:user]
+      @host = opts[:host]
+      @realname = opts[:realname]
     end
 
     def mask
@@ -39,18 +40,6 @@ module Cocoa
 
       @client.whois(@nickname, proxy)
       deferrable
-    end
-
-    def init_observations
-      @client.add_observer(self) do |config|
-        config.observe(:whois_reply, :on_whois_reply).when { |nick| nick == @nickname }
-      end
-    end
-
-    def on_whois_reply(event, nickname, user, host, realname)
-      @user = user
-      @host = host
-      @realname = realname
     end
   end
 end
