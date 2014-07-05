@@ -27,6 +27,10 @@ module Cocoa
       "#{@nickname}#{suffix}"
     end
 
+    def me?
+      @client.identity.nickname.casecmp(@nickname) == 0
+    end
+
     def whois(deferrable = nil)
       deferrable ||= EventMachine::DefaultDeferrable.new
       proxy = EventMachine::DefaultDeferrable.new
