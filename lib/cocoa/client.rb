@@ -75,7 +75,6 @@ module Cocoa
       notify_observers(:message, to, from, message)
 
       specialized = to.is_a?(Channel) ? :channel_message : :user_message
-      puts to
       notify_observers(specialized, to, from, message)
     end
 
@@ -130,8 +129,10 @@ module Cocoa
       notify_observers(:user_kick, from, user, by, message)
     end
 
-    def join(channel, deferrable = nil)
+    def join(channel, deferrable = nil, &block)
       deferrable ||= EventMachine::DefaultDeferrable.new
+      deferrable.callback(&block) if block_given?
+
       message, sequence = @factory.create(:join, channel)
 
       sequence.callback do |messages|
@@ -184,8 +185,10 @@ module Cocoa
       deferrable
     end
 
-    def whois(nickname, deferrable = nil)
+    def whois(nickname, deferrable = nil, &block)
       deferrable ||= EventMachine::DefaultDeferrable.new
+      deferrable.callback(&block) if block_given?
+
       message, sequence = @factory.create(:whois, nickname)
 
       sequence.callback do |messages|

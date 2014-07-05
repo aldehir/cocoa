@@ -32,8 +32,10 @@ module Cocoa
       @client.identity.nickname.casecmp(@nickname) == 0
     end
 
-    def whois(deferrable = nil)
+    def whois(deferrable = nil, &block)
       deferrable ||= EventMachine::DefaultDeferrable.new
+      deferrable.callback(&block) if block_given?
+
       proxy = EventMachine::DefaultDeferrable.new
       proxy.callback { deferrable.succeed(self) }
       proxy.errback { deferrable.fail }
