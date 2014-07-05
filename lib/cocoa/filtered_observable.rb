@@ -1,36 +1,79 @@
 
 module Cocoa
   module FilteredObservable
-    def initialize
-      @observers = []
+    def self.included(base)
+      base.extend(ClassMethods)
+      base.send(:include, InstanceMethods)
     end
 
-    def add_observer(observer)
-      config = Configuration.new
-      yield config
-    
-      @observers << {
-        observer: observer,
-        events: config.entries
-      }
+    module ClassMethods
+      def attr_observable(**attributes)
+        class_eval do
+          attributes.each do |attribute, event|
+            attr_reader attribute
+
+            define_method("#{attribute}=") do |val|
+              old = instance_variable_get("@#{attribute}")
+              instance_variable_set("@#{attribute}", val)
+              notify_observers(event, self, old)
+            end
+          end
+        end
+      end
     end
 
-    def remove_observer(observer)
-      @observers.delete_if { |o| o[:observer].equal?(observer) }
-    end
+    module InstanceMethods
+      def add_observer(observer, event = nil, &block)
+        config = FilteredObservable::Configuration.new
 
-    def notify_observers(event, *args)
-      @observers.each do |observer_hash|
-        observer = observer_hash[:observer]
-        events = observer_hash[:events]
+        if event
+          single_entry = config.observe(event, &block)
+        else
+          yield config
+        end
+        
+        @observers ||= []
 
-        next unless events.include? event
+        index = @observers.index { |x| x[:observer].equal?(observer) }
+        if index
+          hash = @observers[index]
+          config.entries.each do |event, entries|
+            hash[:events][event] ||= []
+            hash[:events][event] += entries
+          end
+        else
+          @observers << {
+            observer: observer,
+            events: config.entries
+          }
+        end
 
-        events[event].each do |entry|
-          next unless observer.respond_to? entry.method
-          next if entry.filter_by && !entry.filter_by.call(*args)
+        single_entry if event
+      end
 
-          observer.send entry.method, event, *args
+      def remove_observer(observer)
+        return if @observers.nil?
+        @observers.delete_if { |o| o[:observer].equal?(observer) }
+      end
+
+      def notify_observers(event, *args)
+        return if @observers.nil?
+        @observers.each do |observer_hash|
+          observer = observer_hash[:observer]
+          events = observer_hash[:events]
+
+          next unless events.include? event
+
+          events[event].each do |entry|
+            next if entry.filter_by && !entry.filter_by.call(*args)
+
+            if entry.method.is_a? Symbol
+              next unless observer.respond_to? entry.method
+              observer.send entry.method, event, *args
+            else
+              entry.method.call(event, *args)
+            end
+          end
         end
       end
     end
@@ -42,9 +85,13 @@ module Cocoa
         @entries = Hash.new { |h, k| h[k] = [] }
       end
 
-      def observe(event, method, &block)
-        entry = Entry.new(event, method)
-        entry.when(&block) if block_given?
+      def observe(event, method = nil, &block)
+        entry =
+          if block_given?
+            Entry.new(event, block)
+          else
+            Entry.new(event, method)
+          end
 
         @entries[event] << entry
         entry
